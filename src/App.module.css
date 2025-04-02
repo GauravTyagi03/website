@@ -1,0 +1,29 @@
+.App {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #d3f8d8;  /* Light purple background */
+}
+
+.gameContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.scoreBoard {
+  font-size: 24px;
+  color: #48854d;  /* BlueViolet color */
+  font-weight: bold;
+}
+
+canvas {
+  background-color: white;
+  border: 2px solid #48854d;  /* BlueViolet color */
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(138, 43, 226, 0.2);  /* BlueViolet shadow */
+  width: 800px;
+  height: 600px;
+} 
