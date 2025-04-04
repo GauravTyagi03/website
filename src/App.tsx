@@ -10,12 +10,14 @@ const BALL_RADIUS = 8;
 const PADDLE_HEIGHT = 15;
 const PADDLE_WIDTH = 120;
 const INITIAL_BALL_SPEED = 4;
-const SPEED_INCREMENT = 0.25; // Increased from 0.15
+const SPEED_INCREMENT = 0.4; // Increased from 0.25 for more challenge
+const BASE_SPEED_MULTIPLIER = 1.2; // Speed increase per round
 const GAME_COLOR = '#48854d'; // BlueViolet color
 
 const App: Component = () => {
   const [score, setScore] = createSignal(0);
   const [gameOver, setGameOver] = createSignal(false);
+  const [round, setRound] = createSignal(1);
   let canvas: HTMLCanvasElement | undefined;
   let animationFrameId: number;
   let gameState = {
@@ -29,6 +31,37 @@ const App: Component = () => {
     leftPressed: false,
   };
 
+  const initBricks = () => {
+    gameState.bricks = [];
+    for (let c = 0; c < BRICK_COLS; c++) {
+      for (let r = 0; r < BRICK_ROWS; r++) {
+        gameState.bricks.push({ x: 0, y: 0, status: 1 });
+      }
+    }
+  };
+
+  const startNewRound = () => {
+    if (!canvas) return;
+    
+    // Initialize ball position
+    gameState.ballX = canvas.width / 2;
+    gameState.ballY = canvas.height - 30;
+    
+    // Calculate new base speed for the round
+    const roundSpeedMultiplier = Math.pow(BASE_SPEED_MULTIPLIER, round() - 1);
+    const baseSpeed = INITIAL_BALL_SPEED * roundSpeedMultiplier;
+    
+    // Reset ball direction with new base speed
+    gameState.ballDX = baseSpeed;
+    gameState.ballDY = -baseSpeed;
+    
+    // Reset paddle position
+    gameState.paddleX = (canvas.width - PADDLE_WIDTH) / 2;
+    
+    // Reset bricks
+    initBricks();
+  };
+
   const initGame = () => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -37,28 +70,12 @@ const App: Component = () => {
     canvas.width = 800;
     canvas.height = 600;
 
-    // Initialize ball position
-    gameState.ballX = canvas.width / 2;
-    gameState.ballY = canvas.height - 30;
-    
-    // Reset ball speed to initial value
-    gameState.ballDX = INITIAL_BALL_SPEED;
-    gameState.ballDY = -INITIAL_BALL_SPEED;
-
-    // Initialize paddle position
-    gameState.paddleX = (canvas.width - PADDLE_WIDTH) / 2;
-
-    // Initialize bricks
-    gameState.bricks = [];
-    for (let c = 0; c < BRICK_COLS; c++) {
-      for (let r = 0; r < BRICK_ROWS; r++) {
-        gameState.bricks.push({ x: 0, y: 0, status: 1 });
-      }
-    }
-
     // Reset game state
     setScore(0);
     setGameOver(false);
+    setRound(1);
+    
+    startNewRound();
   };
 
   const drawBall = (ctx: CanvasRenderingContext2D) => {
@@ -97,11 +114,20 @@ const App: Component = () => {
     }
   };
 
+  const drawRoundInfo = (ctx: CanvasRenderingContext2D) => {
+    ctx.font = '20px Arial';
+    ctx.fillStyle = '#48854d';
+    ctx.textAlign = 'right';
+    ctx.fillText(`Round: ${round()}`, canvas!.width - 20, 30);
+  };
+
   const collisionDetection = () => {
+    let bricksRemaining = 0;
     for (let c = 0; c < BRICK_COLS; c++) {
       for (let r = 0; r < BRICK_ROWS; r++) {
         const b = gameState.bricks[c * BRICK_ROWS + r];
         if (b.status === 1) {
+          bricksRemaining++;
           if (
             gameState.ballX > b.x &&
             gameState.ballX < b.x + BRICK_WIDTH &&
@@ -115,15 +141,17 @@ const App: Component = () => {
             // Increase ball speed
             const speedMultiplier = 1 + (score() * SPEED_INCREMENT / 10);
             const currentSpeed = Math.sqrt(gameState.ballDX * gameState.ballDX + gameState.ballDY * gameState.ballDY);
-            gameState.ballDX = (gameState.ballDX / currentSpeed) * INITIAL_BALL_SPEED * speedMultiplier;
-            gameState.ballDY = (gameState.ballDY / currentSpeed) * INITIAL_BALL_SPEED * speedMultiplier;
-            
-            if (score() === BRICK_ROWS * BRICK_COLS) {
-              setGameOver(true);
-            }
+            gameState.ballDX = (gameState.ballDX / currentSpeed) * INITIAL_BALL_SPEED * speedMultiplier * Math.pow(BASE_SPEED_MULTIPLIER, round() - 1);
+            gameState.ballDY = (gameState.ballDY / currentSpeed) * INITIAL_BALL_SPEED * speedMultiplier * Math.pow(BASE_SPEED_MULTIPLIER, round() - 1);
           }
         }
       }
+    }
+    
+    // Check if round is complete
+    if (bricksRemaining === 0) {
+      setRound(round() + 1);
+      startNewRound();
     }
   };
 
@@ -148,6 +176,7 @@ const App: Component = () => {
     drawBricks(ctx);
     drawBall(ctx);
     drawPaddle(ctx);
+    drawRoundInfo(ctx);
 
     if (gameOver()) {
       drawGameOver(ctx);
@@ -163,7 +192,6 @@ const App: Component = () => {
     if (gameState.ballY + gameState.ballDY < BALL_RADIUS) {
       gameState.ballDY = -gameState.ballDY;
     } else if (gameState.ballY + gameState.ballDY > canvas.height - BALL_RADIUS) {
-      // Check paddle collision at the top edge of the paddle
       if (
         gameState.ballX > gameState.paddleX &&
         gameState.ballX < gameState.paddleX + PADDLE_WIDTH &&
@@ -175,7 +203,7 @@ const App: Component = () => {
         // Adjust angle based on where the ball hits the paddle (-60 to 60 degrees)
         const angle = (hitPos - 0.5) * Math.PI / 1.5;
         
-        // Calculate new velocity components
+        // Calculate new velocity components while maintaining current speed
         const speed = Math.sqrt(gameState.ballDX * gameState.ballDX + gameState.ballDY * gameState.ballDY);
         gameState.ballDX = speed * Math.sin(angle);
         gameState.ballDY = -speed * Math.abs(Math.cos(angle));
@@ -243,7 +271,7 @@ const App: Component = () => {
   return (
     <div class={styles.App}>
       <div class={styles.gameContainer}>
-        <div class={styles.scoreBoard}>Score: {score()}</div>
+        <div class={styles.scoreBoard}>Score: {score()} | Round: {round()}</div>
         <canvas ref={canvas} />
       </div>
     </div>
