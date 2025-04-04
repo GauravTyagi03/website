@@ -9,9 +9,9 @@ const BRICK_PADDING = 15;
 const BALL_RADIUS = 8;
 const PADDLE_HEIGHT = 15;
 const PADDLE_WIDTH = 120;
-const INITIAL_BALL_SPEED = 4;
-const SPEED_INCREMENT = 0.4; // Increased from 0.25 for more challenge
-const BASE_SPEED_MULTIPLIER = 1.2; // Speed increase per round
+const INITIAL_BALL_SPEED = 5;
+const SPEED_INCREMENT = 0.4;
+const BASE_SPEED_MULTIPLIER = 1.2;
 const GAME_COLOR = '#48854d'; // BlueViolet color
 
 const App: Component = () => {
@@ -114,13 +114,6 @@ const App: Component = () => {
     }
   };
 
-  const drawRoundInfo = (ctx: CanvasRenderingContext2D) => {
-    ctx.font = '20px Arial';
-    ctx.fillStyle = '#48854d';
-    ctx.textAlign = 'right';
-    ctx.fillText(`Round: ${round()}`, canvas!.width - 20, 30);
-  };
-
   const collisionDetection = () => {
     let bricksRemaining = 0;
     for (let c = 0; c < BRICK_COLS; c++) {
@@ -128,13 +121,24 @@ const App: Component = () => {
         const b = gameState.bricks[c * BRICK_ROWS + r];
         if (b.status === 1) {
           bricksRemaining++;
-          if (
-            gameState.ballX > b.x &&
-            gameState.ballX < b.x + BRICK_WIDTH &&
-            gameState.ballY > b.y &&
-            gameState.ballY < b.y + BRICK_HEIGHT
-          ) {
-            gameState.ballDY = -gameState.ballDY;
+          // Calculate the closest point on the brick to the ball's center
+          const closestX = Math.max(b.x, Math.min(gameState.ballX, b.x + BRICK_WIDTH));
+          const closestY = Math.max(b.y, Math.min(gameState.ballY, b.y + BRICK_HEIGHT));
+          
+          // Calculate the distance between the ball's center and this closest point
+          const distanceX = gameState.ballX - closestX;
+          const distanceY = gameState.ballY - closestY;
+          const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+          
+          // If the distance is less than the ball's radius, collision occurred
+          if (distance <= BALL_RADIUS) {
+            // Determine which side of the brick was hit
+            if (Math.abs(distanceX) > Math.abs(distanceY)) {
+              gameState.ballDX = -gameState.ballDX;
+            } else {
+              gameState.ballDY = -gameState.ballDY;
+            }
+            
             b.status = 0;
             setScore(score() + 1);
             
@@ -176,7 +180,6 @@ const App: Component = () => {
     drawBricks(ctx);
     drawBall(ctx);
     drawPaddle(ctx);
-    drawRoundInfo(ctx);
 
     if (gameOver()) {
       drawGameOver(ctx);
@@ -191,11 +194,18 @@ const App: Component = () => {
     }
     if (gameState.ballY + gameState.ballDY < BALL_RADIUS) {
       gameState.ballDY = -gameState.ballDY;
-    } else if (gameState.ballY + gameState.ballDY > canvas.height - BALL_RADIUS) {
+    } else if (gameState.ballY + BALL_RADIUS > canvas.height - PADDLE_HEIGHT) {
+      // Improved paddle collision detection
+      const paddleTop = canvas.height - PADDLE_HEIGHT;
+      const ballBottom = gameState.ballY + BALL_RADIUS;
+      const ballLeft = gameState.ballX - BALL_RADIUS;
+      const ballRight = gameState.ballX + BALL_RADIUS;
+      
       if (
-        gameState.ballX > gameState.paddleX &&
-        gameState.ballX < gameState.paddleX + PADDLE_WIDTH &&
-        gameState.ballY + BALL_RADIUS > canvas.height - PADDLE_HEIGHT
+        ballBottom >= paddleTop &&
+        ballBottom <= canvas.height &&
+        ballRight >= gameState.paddleX &&
+        ballLeft <= gameState.paddleX + PADDLE_WIDTH
       ) {
         // Calculate relative position of ball hit on paddle (0 to 1)
         const hitPos = (gameState.ballX - gameState.paddleX) / PADDLE_WIDTH;
@@ -207,7 +217,10 @@ const App: Component = () => {
         const speed = Math.sqrt(gameState.ballDX * gameState.ballDX + gameState.ballDY * gameState.ballDY);
         gameState.ballDX = speed * Math.sin(angle);
         gameState.ballDY = -speed * Math.abs(Math.cos(angle));
-      } else {
+        
+        // Ensure ball doesn't get stuck in paddle
+        gameState.ballY = paddleTop - BALL_RADIUS;
+      } else if (gameState.ballY + BALL_RADIUS > canvas.height) {
         setGameOver(true);
       }
     }
